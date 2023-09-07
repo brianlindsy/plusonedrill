@@ -11,7 +11,8 @@ export const KonvaStage = () => {
     const [isDrawing, setIsDrawing] = useState(false)
     const [lastLinePoint, setLastLinePoint] = useState([-1, -1])
     const [straightLineStartPoint, setStraightLineStartPoint] = useState([-1, -1])
-    const [isPopupVisible, setIsPopupVisible] = useState(false)
+    const [isNumberOfPerformersPopupVisible, setIsNumberOfPerformersPopupVisible] = useState(false)
+    const [isDrawShapesPopupVisible, setIsDrawShapesPopupVisible] = useState(false)
     const [position, setPosition] = useState({ top: 0, left: 0 })
     const [performerCount, setPerformerCount, performerCountRef] = useState(null)
     const [group, setGroup, groupRef] = useState(null)
@@ -21,22 +22,59 @@ export const KonvaStage = () => {
     }
 
     const togglePopup = (e) => {
-        setIsPopupVisible(!isPopupVisible)
+        setIsNumberOfPerformersPopupVisible(!isNumberOfPerformersPopupVisible)
         var cancel = createKonvaButton('Cancel', position.top, position.left, 100, 50, 'cancel')
         var create = createKonvaButton('Create', position.top + 100, position.left, 100, 50, 'create')
         e.target.getLayer().add(create)
         e.target.getLayer().add(cancel)
     }
 
-    const handleCreateLine = (e) => {
-        setIsPopupVisible(false)
-        e.target.getLayer().children.pop()
-        e.target.getLayer().children.pop()
-        e.target.getLayer().children.pop()
-        drawCirclesOnStraightLine(e)
-        setPerformerCount(null)
-        setStraightLineStartPoint([-1, -1])
-        setLastLinePoint([-1, -1])
+    const handleCreate = (e) => {
+        if (currentState === 'drawStraightLine') {
+            setIsNumberOfPerformersPopupVisible(false)
+            e.target.getLayer().children.pop()
+            e.target.getLayer().children.pop()
+            e.target.getLayer().children.pop()
+            drawCirclesOnStraightLine(e)
+            setPerformerCount(null)
+            setStraightLineStartPoint([-1, -1])
+            setLastLinePoint([-1, -1])
+        } else if (currentState === 'drawCircle') {
+            setIsNumberOfPerformersPopupVisible(false)
+            e.target.getLayer().children.pop()
+            e.target.getLayer().children.pop()
+            // we want to turn the circle transparent and add circles around the edge of the circle
+            drawCirclesOnCircle(e)
+            setPerformerCount(null)
+            setStraightLineStartPoint([-1, -1])
+            setLastLinePoint([-1, -1])
+        }
+    }
+
+    const drawCirclesOnCircle = (e) => {
+        // add circles around the edge of the circle equidistant from each other
+        var group = new Konva.Group({
+            draggable: true
+        })
+        setGroup(group)
+        var numberOfCircles = 8
+        var radius = 50
+        var x = e.currentTarget.getPointerPosition().x
+        var y = e.currentTarget.getPointerPosition().y
+        var angle = 360 / numberOfCircles
+        for (var i = 0; i < numberOfCircles; i++) {
+            var newCircle = new Konva.Circle({
+                x: x + radius * Math.cos(angle * i * Math.PI / 180),
+                y: y + radius * Math.sin(angle * i * Math.PI / 180),
+                radius: 4,
+                fill: 'red',
+            })
+            var newGroup = groupRef.current
+            newGroup.add(newCircle)
+            setGroup(newGroup)
+        }
+        e.target.getLayer().add(groupRef.current)
+        setCurrentState('')
     }
 
     const drawCirclesOnStraightLine = (e) => {
@@ -66,7 +104,7 @@ export const KonvaStage = () => {
 
     const handleCancel = (e) => {
         console.log(e.target.getLayer().children)
-        setIsPopupVisible(false)
+        setIsNumberOfPerformersPopupVisible(false)
         e.target.getLayer().children.pop()
         e.target.getLayer().children.pop()
         e.target.getLayer().children.pop()
@@ -136,7 +174,36 @@ export const KonvaStage = () => {
             addCurvedLineStart(e)
         } else if (currentState === 'drawStraightLine') {
             addStraightLineStartPoint(e)
+        } else if (currentState === 'drawSquare') {
+            addSquare(e)
+        } else if (currentState === 'drawCircle') {
+            addCircle(e)
         }
+    }
+
+    const addCircle = (e) => {
+        togglePopup(e)
+        var layer = e.target.getLayer()
+        var newShape = new Konva.Circle({
+            x: e.currentTarget.getPointerPosition().x,
+            y: e.currentTarget.getPointerPosition().y,
+            radius: 50,
+            draggable: true,
+        })
+    }
+
+    const addSquare = (e) => {
+        var layer = e.target.getLayer()
+        var newShape = new Konva.Rect({
+            x: e.currentTarget.getPointerPosition().x,
+            y: e.currentTarget.getPointerPosition().y,
+            width: 100,
+            height: 100,
+            draggable: true,
+            stroke: 'red',
+        })
+        layer.add(newShape)
+        setCurrentState('')
     }
 
     const onDoubleClickEvent = (e) => {
@@ -193,6 +260,11 @@ export const KonvaStage = () => {
         setIsDrawing(false)
     }
 
+    const handleDrawShape = () => {
+        setCurrentState('drawShape')
+        setIsDrawShapesPopupVisible(true)
+    }
+
     // Create a floating left options panel with options for free form shape and line with x performers
     // on the left side of the screen
     const floatingLeftDrawer = () => {
@@ -201,6 +273,7 @@ export const KonvaStage = () => {
                 <ul style={ulStyle}>
                     <li style={liStyle}><button style={linkStyle} onClick={() => setCurrentState('drawCurvedLine')}>Draw Free Form</button></li>
                     <li style={liStyle}><button style={linkStyle} onClick={() => setCurrentState('drawStraightLine')}>Draw Straight Line</button></li>
+                    <li style={liStyle}><button style={linkStyle} onClick={() => handleDrawShape()}>Draw Shape</button></li>
                 </ul>
             </div>
         )
@@ -232,20 +305,58 @@ export const KonvaStage = () => {
 
         button.on('click', (e) => {
             if (buttonType === 'cancel') handleCancel(e)
-            if (buttonType === 'create') handleCreateLine(e)
+            if (buttonType === 'create') handleCreate(e)
         })
 
         return button
     }
 
     // this will be a combination of html component from react-konva-utils and konvajs shapes
-    const popupCard = () => {
+    const numberOfPerformersPopup = () => {
         return (
-            <div style={popupStyle}>
+            <div style={numberOfPerformersPopupStyle}>
                 <label>Number of Performers: </label>
                 <input type="text" onChange={(e) => handlePerformerCount(e)} />
             </div>
         )
+    }
+
+    const handleSelectSquare = () => {
+        setIsDrawShapesPopupVisible(false)
+        setCurrentState('drawSquare')
+
+    }
+
+    const handleSelectCircle = () => {
+        setIsDrawShapesPopupVisible(false)
+        setCurrentState('drawCircle')
+    }
+
+    const drawShapesPopup = () => {
+        return (
+            <div style={drawShapesPopupStyle}>
+                <button onClick={() => handleSelectSquare()}>Square</button>
+                <button onClick={() => handleSelectCircle()}>Circle</button>
+            </div>
+        )
+    }
+
+    const onMouseOverEvent = (e) => {
+        e.target.getStage().container().style.cursor = 'crosshair'
+    }
+
+    const drawShapesPopupStyle = {
+        height: window.innerHeight * .1,
+        width: window.innerWidth * .1,
+        position: 'absolute',
+        top: window.innerHeight * .1,
+        left: window.innerWidth * .1,
+        backgroundColor: '#fff',
+        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
+        padding: '10px',
+        borderRadius: '4px',
+        display: isDrawShapesPopupVisible ? 'block' : 'none',
+        zIndex: '100',
     }
 
     const topLevelScreenStyle = {
@@ -283,16 +394,16 @@ export const KonvaStage = () => {
         fontWeight: 'bold',
     }
 
-    const popupStyle = {
+    const numberOfPerformersPopupStyle = {
         position: 'absolute',
-        top: position.top + 10, // Adjust the offset as needed
-        left: position.left + 100, // Adjust the offset as needed
+        top: position.top + 10,
+        left: position.left + 100,
         transform: 'translateX(-50%)',
         backgroundColor: '#fff',
         boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
         padding: '10px',
         borderRadius: '4px',
-        display: isPopupVisible ? 'block' : 'none',
+        display: isNumberOfPerformersPopupVisible ? 'block' : 'none',
         zIndex: '100',
     }
 
@@ -307,13 +418,15 @@ export const KonvaStage = () => {
     return (
         <div style={topLevelScreenStyle}>
             {floatingLeftDrawer()}
-            {isPopupVisible && popupCard()}
+            {isNumberOfPerformersPopupVisible && numberOfPerformersPopup()}
+            {isDrawShapesPopupVisible && drawShapesPopup()}
             {currentState}
             <Stage
                 onDblClick={onDoubleClickEvent}
                 onMouseDown={onMouseDownEvent}
                 onMouseMove={onMouseMoveEvent}
                 onMouseUp={onMouseUpEvent}
+                onMouseOver={onMouseOverEvent}
                 width={window.innerWidth * .9} height={window.innerHeight * .9}
                 style={stageStyle}>
                 <Layer>
@@ -323,3 +436,4 @@ export const KonvaStage = () => {
         </div>
     )
 }
+
