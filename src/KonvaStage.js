@@ -2,6 +2,10 @@ import { Stage, Layer, Image } from 'react-konva'
 import useImage from 'use-image'
 import Konva from "konva"
 import useState from 'react-usestateref'
+import FloatingLeftDrawer from "./components/FloatingLeftDrawer";
+import NumberOfPerformersPopup from "./components/popups/NumberOfPerformersPopup";
+import DrawShapesPopup from "./components/popups/DrawShapesPopup";
+import { createKonvaButton } from "./KonvaUtils";
 
 const drillPaperImage = "assets/drill-paper.png"
 export const KonvaStage = () => {
@@ -23,8 +27,8 @@ export const KonvaStage = () => {
 
     const togglePopup = (e) => {
         setIsNumberOfPerformersPopupVisible(!isNumberOfPerformersPopupVisible)
-        var cancel = createKonvaButton('Cancel', position.top, position.left, 100, 50, 'cancel')
-        var create = createKonvaButton('Create', position.top + 100, position.left, 100, 50, 'create')
+        var cancel = createKonvaButton('Cancel', position.top, position.left, 100, 50, 'cancel', handleCancel)
+        var create = createKonvaButton('Create', position.top + 100, position.left, 100, 50, 'create', handleCreate)
         e.target.getLayer().add(create)
         e.target.getLayer().add(cancel)
     }
@@ -43,7 +47,6 @@ export const KonvaStage = () => {
             setIsNumberOfPerformersPopupVisible(false)
             e.target.getLayer().children.pop()
             e.target.getLayer().children.pop()
-            // we want to turn the circle transparent and add circles around the edge of the circle
             drawCirclesOnCircle(e)
             setPerformerCount(null)
             setStraightLineStartPoint([-1, -1])
@@ -52,12 +55,10 @@ export const KonvaStage = () => {
     }
 
     const drawCirclesOnCircle = (e) => {
-        // add circles around the edge of the circle equidistant from each other
         var group = new Konva.Group({
             draggable: true
         })
-        setGroup(group)
-        var numberOfCircles = 8
+        var numberOfCircles = performerCountRef.current
         var radius = 50
         var x = e.currentTarget.getPointerPosition().x
         var y = e.currentTarget.getPointerPosition().y
@@ -69,11 +70,9 @@ export const KonvaStage = () => {
                 radius: 4,
                 fill: 'red',
             })
-            var newGroup = groupRef.current
-            newGroup.add(newCircle)
-            setGroup(newGroup)
+            group.add(newCircle)
         }
-        e.target.getLayer().add(groupRef.current)
+        e.target.getLayer().add(group)
         setCurrentState('')
     }
 
@@ -192,18 +191,47 @@ export const KonvaStage = () => {
         })
     }
 
+    function drawSquareFormation(layer, rectX, rectY, sideLength, n) {
+        const m = Math.ceil(n / 4);  // approx performers per side
+        const spacing = sideLength / (m - 1);  // space between performers
+
+        for (let i = 0; i < m; i++) {
+            // Top side
+            drawCircle(layer, rectX + i * spacing, rectY);
+            // Right side
+            drawCircle(layer, rectX + sideLength, rectY + i * spacing);
+            // Bottom side
+            drawCircle(layer, rectX + i * spacing, rectY + sideLength);
+            // Left side
+            drawCircle(layer, rectX, rectY + i * spacing);
+        }
+
+        layer.draw()
+    }
+
+    function drawCircle(layer, x, y) {
+        const circle = new Konva.Circle({
+            x: x,
+            y: y,
+            radius: 4,  // adjust as necessary
+            fill: 'red'  // adjust color as needed
+        });
+        var newGroup = groupRef.current
+        newGroup.add(circle)
+    }
+
     const addSquare = (e) => {
         var layer = e.target.getLayer()
-        var newShape = new Konva.Rect({
-            x: e.currentTarget.getPointerPosition().x,
-            y: e.currentTarget.getPointerPosition().y,
-            width: 100,
-            height: 100,
-            draggable: true,
-            stroke: 'red',
+        var sqaureGroup = new Konva.Group({
+            draggable: true
         })
-        layer.add(newShape)
+        setGroup(sqaureGroup)
+        var x = e.currentTarget.getPointerPosition().x
+        var y = e.currentTarget.getPointerPosition().y
+        drawSquareFormation(layer, x, y, 100, 20)
+        layer.add(groupRef.current)
         setCurrentState('')
+        setGroup(null)
     }
 
     const onDoubleClickEvent = (e) => {
@@ -260,67 +288,6 @@ export const KonvaStage = () => {
         setIsDrawing(false)
     }
 
-    const handleDrawShape = () => {
-        setCurrentState('drawShape')
-        setIsDrawShapesPopupVisible(true)
-    }
-
-    // Create a floating left options panel with options for free form shape and line with x performers
-    // on the left side of the screen
-    const floatingLeftDrawer = () => {
-        return (
-            <div style={menuStyle}>
-                <ul style={ulStyle}>
-                    <li style={liStyle}><button style={linkStyle} onClick={() => setCurrentState('drawCurvedLine')}>Draw Free Form</button></li>
-                    <li style={liStyle}><button style={linkStyle} onClick={() => setCurrentState('drawStraightLine')}>Draw Straight Line</button></li>
-                    <li style={liStyle}><button style={linkStyle} onClick={() => handleDrawShape()}>Draw Shape</button></li>
-                </ul>
-            </div>
-        )
-    }
-
-    const createKonvaButton = (text, x, y, width, height, buttonType) => {
-        var button = new Konva.Label({
-            x: x,
-            y: y,
-            opacity: 0.75,
-            height: height,
-            width: width
-        })
-
-        button.add(new Konva.Tag({
-            fill: 'blue',
-            lineJoin: 'round',
-            shadowBlur: 10,
-            shadowOffset: 10,
-            shadowOpacity: 0.5
-        }))
-
-        button.add(new Konva.Text({
-            text: text,
-            fontSize: 18,
-            padding: 5,
-            fill: 'white'
-        }))
-
-        button.on('click', (e) => {
-            if (buttonType === 'cancel') handleCancel(e)
-            if (buttonType === 'create') handleCreate(e)
-        })
-
-        return button
-    }
-
-    // this will be a combination of html component from react-konva-utils and konvajs shapes
-    const numberOfPerformersPopup = () => {
-        return (
-            <div style={numberOfPerformersPopupStyle}>
-                <label>Number of Performers: </label>
-                <input type="text" onChange={(e) => handlePerformerCount(e)} />
-            </div>
-        )
-    }
-
     const handleSelectSquare = () => {
         setIsDrawShapesPopupVisible(false)
         setCurrentState('drawSquare')
@@ -332,35 +299,12 @@ export const KonvaStage = () => {
         setCurrentState('drawCircle')
     }
 
-    const drawShapesPopup = () => {
-        return (
-            <div style={drawShapesPopupStyle}>
-                <button onClick={() => handleSelectSquare()}>Square</button>
-                <button onClick={() => handleSelectCircle()}>Circle</button>
-            </div>
-        )
-    }
-
     const onMouseOverEvent = (e) => {
         e.target.getStage().container().style.cursor = 'crosshair'
     }
 
-    const drawShapesPopupStyle = {
-        height: window.innerHeight * .1,
-        width: window.innerWidth * .1,
-        position: 'absolute',
-        top: window.innerHeight * .1,
-        left: window.innerWidth * .1,
-        backgroundColor: '#fff',
-        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
-        padding: '10px',
-        borderRadius: '4px',
-        display: isDrawShapesPopupVisible ? 'block' : 'none',
-        zIndex: '100',
-    }
-
     const topLevelScreenStyle = {
-        position: 'relative'
+        position: 'relative',
     }
 
     const stageStyle = {
@@ -369,57 +313,22 @@ export const KonvaStage = () => {
         top: window.innerHeight * .1,
     }
 
-    const menuStyle = {
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        width: window.innerWidth * .1 - 10,
-        height: '100%',
-        backgroundColor: '#FFFFFF',
-        color: '#fff', // Text color
-        boxShadow: '0px 0px 5px rgba(0, 0, 0, 0.25)'
-    }
-
-    const ulStyle = {
-        listStyleType: 'none',
-        margin: 0,
-        padding: 0,
-    }
-
-    const liStyle = {
-        marginBottom: '15px',
-    }
-
-    const linkStyle = {
-        fontWeight: 'bold',
-    }
-
-    const numberOfPerformersPopupStyle = {
-        position: 'absolute',
-        top: position.top + 10,
-        left: position.left + 100,
-        transform: 'translateX(-50%)',
-        backgroundColor: '#fff',
-        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
-        padding: '10px',
-        borderRadius: '4px',
-        display: isNumberOfPerformersPopupVisible ? 'block' : 'none',
-        zIndex: '100',
-    }
-
-    const closeIconStyle = {
-        position: 'absolute',
-        top: '5px',
-        right: '5px',
-        cursor: 'pointer',
-        padding: '5',
-    }
-
     return (
         <div style={topLevelScreenStyle}>
-            {floatingLeftDrawer()}
-            {isNumberOfPerformersPopupVisible && numberOfPerformersPopup()}
-            {isDrawShapesPopupVisible && drawShapesPopup()}
+            <FloatingLeftDrawer
+                setCurrentState={setCurrentState}
+                setIsDrawShapesPopupVisible={setIsDrawShapesPopupVisible}
+            />
+            <NumberOfPerformersPopup
+                isNumberOfPerformersPopupVisible={isNumberOfPerformersPopupVisible}
+                position={position}
+                handlePerformerCount={handlePerformerCount}
+            />
+            <DrawShapesPopup
+                isDrawShapesPopupVisible={isDrawShapesPopupVisible}
+                handleSelectSquare={handleSelectSquare}
+                handleSelectCircle={handleSelectCircle}
+            />
             {currentState}
             <Stage
                 onDblClick={onDoubleClickEvent}
@@ -436,4 +345,3 @@ export const KonvaStage = () => {
         </div>
     )
 }
-
